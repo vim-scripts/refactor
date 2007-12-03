@@ -34,9 +34,13 @@
 "
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " BUGS:
-" 	1. Can not handle 'int a = 0' like statment in local variable to
+" 	1. (Fixed) Can not handle 'int a = 0' like statment in local variable to
 " 	parameter, because s:IdentifierPattern can not start with digit.
-" 	2. Add word boundary to some patterns. (\<\>)
+" 	2. (Fixed) Add word boundary to some patterns. (\<\>)
+" 	3. (Fixed) <cWORD> will expand to whole expression in introducing constant.
+" 	Thus, abc3def[>4<] will parse to 3. Fixed by iteration.
+" 	4. (Fixed) Parse error of variable defination with initialization.
+"
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " These are the default key mappings
@@ -66,9 +70,13 @@ let s:FunctionDeclarationPattern 	= s:FunctionPattern . s:MissableSeperatorPatte
 let s:FunctionDefinationPattern 	= s:FunctionPattern . s:MissableSeperatorPattern . '\%({\)\@='
 
 function! IntroduceConstant()
-	let text = expand('<cWORD>')
 	let NumberPattern = '\%(\d\+\.\?\d*\|\d*\.\d\+\)\%(f\|F\|L\|l\|U\|u\|ul\|UL\|uL\|Ul\)\?' "'\d\+\%(L\|l\|U\|u\|ul\|UL\|uL\|Ul\)\?\|\d\+\.\d\+[Ff]\?\|\.\d\+[Ff]\?'
-	let matched = matchstr(text, NumberPattern)
+	let text = getline('.')
+	let position = col('.') - 1
+	while strpart(text, position) =~ '^' . NumberPattern && position > 0
+		let position = position - 1
+	endwhile
+	let matched = matchstr(strpart(text, position), NumberPattern)
 	if matched == ""
 		call confirm('Can not parse a constant under cursor!')
 		return
@@ -94,7 +102,7 @@ function! IntroduceConstant()
 		exec 'normal! [{'
 		exec "normal! oconst " . type . " " . constantName . ' = ' . matched . ";\e"
 		let startLine = line('.') + 1
-		let replace = confirm('Replate all ' . matched .' in this function with "' . constantName . '"?')
+		let replace = confirm('Replate all ' . matched .' in this function with "' . constantName . '"?', "&Yes\n&No")
 		if replace == 1
 			call GotoBeginingBracketOfCurrentFunction()
 			normal! %
@@ -245,11 +253,6 @@ function! LocalVariableToParameter()
 		endif
 	else
 		if match(currentLine, '\<' . variableName . '\>\s*=') >= 0
-			" Bug 1 : 2007-12-4
-			" This will not work for 'int a = 0', because s:IdentifierPattern
-			" can not start with digit. 
-			" let variableDefination = matchstr(currentLine, '\<' . variableName . '\>\s*=\s*' . s:IdentifierPattern . '.\{-\}\([,;]\)\@=')
-			" let remainStart = match(currentLine, '\<' . variableName . '\>\s*=\s*' . s:IdentifierPattern . '\((.*)\)*') + strlen(variableDefination)
 			let variableDefination = matchstr(currentLine, '\<' . variableName . '\>\s*=\s*.\{-\}\([,;]\)\@=')
 			let remainStart = match(currentLine, '\<' . variableName . '\>\s*=\s*\((.*)\)*') + strlen(variableDefination)
 			let remain = strpart(currentLine, remainStart)
@@ -375,7 +378,7 @@ function! GetCurrentVariableType(topestLine)
 	call cursor(startRow, 1000)
 	
 
-	let DeclarationPattern = s:TypeIdentifierPattern . '\s*\%(' . s:IdentifierPattern . '.*,\s*\)*\<' . variableName . '\>\%(\[\d*\]\)*'
+	let DeclarationPattern = s:TypeIdentifierPattern . '\s*\%(' . s:IdentifierPattern . '[^()]*,\s*\)*\<' . variableName . '\>\%(\[\d*\]\)*'
 	while search(DeclarationPattern, "bW", stopRow) > 0
 		if expand('<cword>') =~ 'return'
 			continue
