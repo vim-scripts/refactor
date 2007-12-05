@@ -125,6 +125,10 @@ function! ReorderParameters()
 		return 
 	endif
 	if len(parameterList) > 0
+		if len(parameterList) > 10
+			call confirm('Parameter count should less than 10!')
+			return
+		endif
 		let text = "Parameters of current function are:"
 		let start = 0
 		while start < len(parameterList)
@@ -136,6 +140,10 @@ function! ReorderParameters()
 		while processed == 0
 			let order = inputdialog(text)
 			if order != ""			
+				if order =~ '\D'
+					call confirm('Just input the indexes without seperator, please!')
+					continue
+				endif
 				let processed = 1
 				let index = 0
 				while index < len(parameterList)
